@@ -1,4 +1,2 @@
-.gclient
-.gclient_entries
 depot_tools
-src
+webrtc

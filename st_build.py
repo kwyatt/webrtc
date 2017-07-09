@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+
 # This script handles the operations necessary to build and package webrtc for use in
 # the sw-dev repo.
 # - It aggregates the generated libraries into a single one (simplifies linking on the cmake side)
@@ -11,8 +12,11 @@
 # revision is, and webrtc rev number provides the exact reference for the webrtc source code. Note that you want to use the exact
 # same version string for all platforms.
 #
-# Important note: the source directory contains platform-specific differences, so it is not possible to
-# share the same source directory between different platforms (e.g. residing on a host OS and shared to VMs).
+# Important note: this script makes platform-specific changes in the source tree, so it is not possible to
+# share the same source tree between different platforms (e.g. residing on a host OS and shared to VMs).
+# If the initial build is aborted, it is recommended to delete the <source>/webrtc directory.
+# If the initial build is aborted during cloning of the depot_tools repository,
+# it is recommended to delete the depot_tools repository directory.
 
 import optparse
 import os
@@ -25,7 +29,8 @@ import tempfile
 
 current_dir = os.getcwd()
 script_dir = os.path.dirname(os.path.abspath(__file__))
-src_dir = os.path.join(script_dir, "src")
+webrtc_dir = os.path.join(script_dir, "webrtc")
+src_dir = os.path.join(webrtc_dir, "src")
 
 windows = platform.system() == 'Windows'
 linux = platform.system() == 'Linux'
@@ -383,53 +388,62 @@ def initializeSubrepository(path, url):
   cwd = path
   if subprocess.call(cmd, cwd=cwd) != 0:
     print >> sys.stderr, "Could not add st remote \"%s\" for \"%s\"" % (url, path)
-    exit(1)
+    return False
 
   cmd = ["git", "fetch", "st"]
   cwd = path
   if subprocess.call(cmd, cwd=cwd) != 0:
     print >> sys.stderr, "Could not fetch to \"%s\" from st" % path
-    exit(1)
+    return False
 
   cmd = ["git", "checkout", "st"]
   cwd = path
   if subprocess.call(cmd, cwd=cwd) != 0:
     print >> sys.stderr, "Could not checkout to \"%s\" from st" % path
-    exit(1)
+    return False
 
   cmd = ["git", "pull", "st", "st"]
   cwd = path
   if subprocess.call(cmd, cwd=cwd) != 0:
     print >> sys.stderr, "Could not pull to \"%s\" from st" % path
-    exit(1)
+    return False
+
+  return True
 
 # Set up the WebRTC repository
 def initializeRepository():
-  if not os.path.exists(src_dir):
+  if not os.path.exists(webrtc_dir):
+    os.makedirs(webrtc_dir)
+
     cmd = ["fetch", "--nohooks", "webrtc"]
-    cwd = script_dir
+    cwd = webrtc_dir
     if subprocess.call(cmd, cwd=cwd) != 0:
-      print >> sys.stderr, "Could not fetch webrtc"
-      exit(1)
+      print >> sys.stderr, "Could not fetch webrtc."
+      return False
 
     cmd = ["gclient", "sync"]
-    cwd = script_dir
+    cwd = webrtc_dir
     if subprocess.call(cmd, cwd=cwd) != 0:
-      print >> sys.stderr, "Could not do initial gclient sync"
-      exit(1)
+      print >> sys.stderr, "Could not do initial gclient sync."
+      return False
 
-    initializeSubrepository(src_dir, "https://github.com/suitabletech/webrtc_src.git")
+    if not initializeSubrepository(src_dir, "https://github.com/suitabletech/webrtc_src.git"):
+      print >> sys.stderr, "\"src\" initialization failed"
+      return False
 
     cmd = ["gclient", "sync"]
     cwd = src_dir
     if subprocess.call(cmd, cwd=cwd) != 0:
-      print >> sys.stderr, "Could not do final gclient sync"
-      exit(1)
+      print >> sys.stderr, "Could not do final gclient sync."
+      return False
 
     src_build_dir = os.path.join(src_dir, "build")
-    initializeSubrepository(src_build_dir, "https://github.com/suitabletech/webrtc_src_build.git")
+    if not initializeSubrepository(src_build_dir, "https://github.com/suitabletech/webrtc_src_build.git"):
+      print >> sys.stderr, "\"src/build\" initialization failed"
+      return False
 
   trimThirdParty()
+  return True
 
 def main(argv):
   usage = "Usage: %prog [options]"
@@ -469,7 +483,9 @@ def main(argv):
 
   os.environ['PATH'] = options.depot_tools + os.pathsep + os.environ['PATH']
 
-  initializeRepository()
+  if not initializeRepository():
+    print >> sys.stderr, "Repository initialization failed. Delete %s in order to try again." % webrtc_dir
+    exit(1)
 
   if options.configuration in ['Debug', 'Release']:
     build(options.output, options.configuration)
