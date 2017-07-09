@@ -5,7 +5,7 @@
 # - It generates a tar.gz that can be uploaded to repo.suitabletech.com
 #
 # Usage example:
-# st_build.py --platform=linux-x64 --source_dir=~/webrtc-checkout -c Release --version=20170131_ac61b745df8eb918e8a39368fec7d7c3a890f221
+# st_build.py --platform=linux-x64 -c Release -v 20170131_ac61b745df8eb918e8a39368fec7d7c3a890f221
 #
 # By convention, use the date and webrtc source revision for <version>. The date is convenient to quickly know how old the
 # revision is, and webrtc rev number provides the exact reference for the webrtc source code. Note that you want to use the exact
@@ -32,13 +32,11 @@ linux = platform.system() == 'Linux'
 mac = platform.system() == 'Darwin'
 
 class WebRTCPackager:
-  # source_root: the source dir of webrtc, containing the src directory
   # build_root: the build directory of webrtc, containing a subdirectory for each configuration; defaults to the current working directory
   # version: the version is we use in download_thirdparty_binaries
   # platform: the platform we are packaging for
   # config: the webrtc config we are building for (Debug/Release or more depending on platform)
-  def __init__(self, source_root, build_root, version, platform, config):
-    self.source_root = source_root
+  def __init__(self, build_root, version, platform, config):
     self.build_root = build_root
     self.version = version
     self.platform = platform
@@ -105,7 +103,7 @@ class WebRTCPackager:
     for subdir in [ 'webrtc', 'third_party' ]:
       # Gather all the header files from webrtc
       headers_ext = [ '.h', '.hpp', '.h.def' ]
-      src = os.path.join(self.source_root, 'src', subdir)
+      src = os.path.join(source_dir, subdir)
       headers = findAllFilesWithExtension(src, headers_ext)
       copyFiles(src, os.path.join(package_dir, 'include', subdir), headers)
 
@@ -215,8 +213,8 @@ class WebRTCPackager:
     # Remove the -D and =xxxx from the define to get the name
     def_names = { re.sub('-D(\w+).*', '\\1', d):d for d in defs }
     # Look which defines are actually used in webrtc and only print those.
-    self.filterDefines(os.path.join(self.source_root, 'src', 'third_party'), def_names, used_defs)
-    self.filterDefines(os.path.join(self.source_root, 'src', 'webrtc'), def_names, used_defs)
+    self.filterDefines(os.path.join(source_dir, 'third_party'), def_names, used_defs)
+    self.filterDefines(os.path.join(source_dir, 'webrtc'), def_names, used_defs)
 
     print "set(webrtc_DEFS"
     print "\n".join(["  " + used_defs[x] for x in used_defs.keys()])
@@ -389,33 +387,31 @@ def main(argv):
   }.get(platform.system(), None)
 
   parser = optparse.OptionParser(usage=usage)
-  parser.add_option("--source_dir", dest="source_dir", default=script_dir, help="Location of the webrtc source directory (containing 'src')")
-  parser.add_option("--build_dir", dest="build_dir", default=current_dir, help="Location of the webrtc build directory (to contain 'Debug' and/or 'Release')")
-  parser.add_option("--version", dest="version", default=None, help="Name to give to the webrtc build. It is recommended to use the format <date>-<git change number>")
-  parser.add_option("--platform", dest="platform", default=default_platform, help="Platform to generate for (linux-x64, win32, osx, ...)")
-  parser.add_option("-c", "--configuration", dest="configuration", default="Both", help="Configuration for webrtc (Debug, Release, or Both)")
+  parser.add_option("-o", "--output", dest="output", default=current_dir, help="Path for the webrtc build directory (default: current working directory)")
+  parser.add_option("-v", "--version", dest="version", default=None, help="Name to give the build; recommended to use the format <date>-<git change number>")
+  parser.add_option("-p", "--platform", dest="platform", default=default_platform, help="Name of the platform to generate for ('linux-x64', 'win32', 'osx', or 'linux-android-armeabi-v7a'; default: host platform)")
+  parser.add_option("-c", "--configuration", dest="configuration", default="Both", help="Build configuration ('Debug', 'Release', or 'Both'; default: 'Both')")
   (options, args) = parser.parse_args(argv)
-
-  required_options = ["source_dir", "version", "platform"]
-  for k in required_options:
-    if not options.__dict__.has_key(k) or not options.__dict__[k]:
-      parser.error("Option '" + k + "' must be specified")
 
   print "Options values:"
   for k in options.__dict__:
     print "--%s=%s" % (k, options.__dict__[k])
 
+  required_options = ["version"]
+  for k in required_options:
+    if not options.__dict__.has_key(k) or not options.__dict__[k]:
+      parser.error("Option '" + k + "' must be specified")
+
   trimThirdParty()
 
   if options.configuration in ['Debug', 'Release']:
-    build(options.build_dir, options.configuration)
+    build(options.output, options.configuration)
   else:
-    build(options.build_dir, 'Debug')
-    build(options.build_dir, 'Release')
+    build(options.output, 'Debug')
+    build(options.output, 'Release')
 
   packager = WebRTCPackager(
-    options.source_dir,
-    options.build_dir,
+    options.output,
     options.version,
     options.platform,
     options.configuration
