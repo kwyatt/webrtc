@@ -25,7 +25,7 @@ import tempfile
 
 current_dir = os.getcwd()
 script_dir = os.path.dirname(os.path.abspath(__file__))
-source_dir = os.path.abspath(os.path.join(script_dir, os.pardir))
+source_dir = os.path.join(script_dir, "src")
 
 windows = platform.system() == 'Windows'
 linux = platform.system() == 'Linux'
@@ -321,10 +321,11 @@ def build(build_dir, configuration):
       args.append("target_cpu=\\\"x86\\\"")
 
   cmd = "gn gen %s --args=\"%s\"" % (out_dir, ' '.join(args))
-  if subprocess.call(cmd, cwd=script_dir, shell=True) != 0:
+  if subprocess.call(cmd, cwd=source_dir, shell=True) != 0:
     exit(1)
 
-  if subprocess.call(['ninja', '-j5', '-C', out_dir], cwd=script_dir) != 0:
+  cmd = ['ninja', '-j5', '-C', out_dir]
+  if subprocess.call(cmd, cwd=source_dir) != 0:
     exit(1)
 
 def copy(src, dest_dir):
@@ -361,9 +362,9 @@ def trimThirdParty():
   elif windows:
     libs.append("winsdk_samples")
 
-  third_party_dir = os.path.join(script_dir, "third_party")
-  third_party_old_dir = os.path.join(script_dir, "third_party.old")
-  third_party_new_dir = os.path.join(script_dir, "third_party.new")
+  third_party_dir = os.path.join(source_dir, "third_party")
+  third_party_old_dir = os.path.join(source_dir, "third_party.old")
+  third_party_new_dir = os.path.join(source_dir, "third_party.new")
   if not os.path.isdir(third_party_old_dir) and os.path.isdir(third_party_dir):
     # No third_party_old_dir: either hasn't been run, or failed during copy to third_party_new_dir.
     # No third_party_dir: completed up to, but not including, rename of third_party_new_dir to third_party_dir.
@@ -388,14 +389,14 @@ def main(argv):
   }.get(platform.system(), None)
 
   parser = optparse.OptionParser(usage=usage)
-  parser.add_option("--source_dir", dest="source_dir", default=source_dir, help="Location of the webrtc source directory (containing 'src')")
-  parser.add_option("--build_dir", dest="build_dir", default=current_dir, help="Location of the webrtc build directory (containing 'Debug' and/or 'Release')")
+  parser.add_option("--source_dir", dest="source_dir", default=script_dir, help="Location of the webrtc source directory (containing 'src')")
+  parser.add_option("--build_dir", dest="build_dir", default=current_dir, help="Location of the webrtc build directory (to contain 'Debug' and/or 'Release')")
   parser.add_option("--version", dest="version", default=None, help="Name to give to the webrtc build. It is recommended to use the format <date>-<git change number>")
   parser.add_option("--platform", dest="platform", default=default_platform, help="Platform to generate for (linux-x64, win32, osx, ...)")
   parser.add_option("-c", "--configuration", dest="configuration", default="Both", help="Configuration for webrtc (Debug, Release, or Both)")
   (options, args) = parser.parse_args(argv)
 
-  required_options = [ "source_dir", "version", "platform" ]
+  required_options = ["source_dir", "version", "platform"]
   for k in required_options:
     if not options.__dict__.has_key(k) or not options.__dict__[k]:
       parser.error("Option '" + k + "' must be specified")
