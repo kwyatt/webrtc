@@ -123,7 +123,7 @@ class WebRTCPackager:
   def makePackageArchive(self, package_dir, version_name):
     os.chdir(self.build_root)
     archive_name = 'webrtc-' + version_name + '-' + self.platform + ".tar.gz"
-    if subprocess.call([ 'cmake', '-E', 'tar', 'cvzf', archive_name, version_name]) != 0:
+    if subprocess.call(['cmake', '-E', 'tar', 'cvzf', archive_name, version_name]) != 0:
       sys.exit(1)
 
   # Build a tar.gz that we can upload to repo
@@ -325,12 +325,12 @@ def build(build_dir, configuration):
     if windows:
       args.append("target_cpu=\\\"x86\\\"")
 
-  cmd = "gn gen %s --args=\"%s\"" % (out_dir, ' '.join(args))
+  cmd = "gn gen \"%s\" --args=\"%s\"" % (out_dir, ' '.join(args))
   if subprocess.call(cmd, cwd=webrtc_src_dir, shell=True) != 0:
     exit(1)
 
   cmd = ['ninja', '-j5', '-C', out_dir]
-  if subprocess.call(cmd, cwd=webrtc_src_dir) != 0:
+  if subprocess.call(cmd, cwd=webrtc_src_dir, shell=True) != 0:
     exit(1)
 
 def copy(src, dest_dir):
@@ -387,8 +387,7 @@ def trimThirdParty():
 # Sets up a repository within the WebRTC repository and updates
 def initializeSubrepository(path, url):
   cmd = ["git", "remote", "add", "st", url]
-  cwd = path
-  if subprocess.call(cmd, cwd=cwd) != 0:
+  if subprocess.call(cmd, cwd=path) != 0:
     print >> sys.stderr, "Could not add st remote \"%s\" for \"%s\"; it may already exist." % (url, path)
 
   if not updateSubrepository(path):
@@ -403,14 +402,12 @@ def initializeRepository():
     os.makedirs(webrtc_dir)
 
   cmd = ["fetch", "--nohooks", "webrtc"]
-  cwd = webrtc_dir
-  if subprocess.call(cmd, cwd=cwd) != 0:
+  if subprocess.call(cmd, cwd=webrtc_dir, shell=True) != 0:
     print >> sys.stderr, "Could not fetch webrtc; it may have already been fetched."
     return False
 
   cmd = ["gclient", "sync"]
-  cwd = webrtc_dir
-  if subprocess.call(cmd, cwd=cwd) != 0:
+  if subprocess.call(cmd, cwd=webrtc_dir, shell=True) != 0:
     print >> sys.stderr, "Could not do initial gclient sync."
     return False
 
@@ -422,8 +419,7 @@ def initializeRepository():
   # This has to be done after "src" is initialized, but before "src" subdirectories
   # are initialized (since gclient sync will set them to the upstream checkout).
   cmd = ["gclient", "sync"]
-  cwd = webrtc_src_dir
-  if subprocess.call(cmd, cwd=cwd) != 0:
+  if subprocess.call(cmd, cwd=webrtc_src_dir, shell=True) != 0:
     print >> sys.stderr, "Could not do final gclient sync."
     return False
 
@@ -438,20 +434,17 @@ def initializeRepository():
 # Updates a repository within the WebRTC repository to latest in "st" branch
 def updateSubrepository(path):
   cmd = ["git", "fetch", "st"]
-  cwd = path
-  if subprocess.call(cmd, cwd=cwd) != 0:
+  if subprocess.call(cmd, cwd=path) != 0:
     print >> sys.stderr, "Could not fetch to \"%s\" from st." % path
     return False
 
   cmd = ["git", "checkout", "st"]
-  cwd = path
-  if subprocess.call(cmd, cwd=cwd) != 0:
+  if subprocess.call(cmd, cwd=path) != 0:
     print >> sys.stderr, "Could not checkout to \"%s\" from st." % path
     return False
 
   cmd = ["git", "pull", "st", "st"]
-  cwd = path
-  if subprocess.call(cmd, cwd=cwd) != 0:
+  if subprocess.call(cmd, cwd=path) != 0:
     print >> sys.stderr, "Could not pull to \"%s\" from st." % path
     return False
 
@@ -494,12 +487,14 @@ def parseArguments():
 def initializeDepotTools(path):
   if not os.path.exists(path):
     cmd = ["git", "clone", "https://chromium.googlesource.com/chromium/tools/depot_tools.git", os.path.basename(path)]
-    cwd = os.path.dirname(path)
-    if subprocess.call(cmd, cwd=cwd) != 0:
+    if subprocess.call(cmd, cwd=os.path.dirname(path)) != 0:
       print >> sys.stderr, "Could not clone depot_tools to \"%s\"." % path
       return False
 
   os.environ['PATH'] = path + os.pathsep + os.environ['PATH']
+  if windows:
+    os.environ['DEPOT_TOOLS_WIN_TOOLCHAIN'] = '0'
+
   return True
 
 def main():
