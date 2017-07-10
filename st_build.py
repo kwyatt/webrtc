@@ -18,7 +18,7 @@
 # If the initial build is aborted during cloning of the depot_tools repository,
 # it is recommended to delete the depot_tools repository directory.
 
-import optparse
+import argparse
 import os
 import platform
 import re
@@ -29,8 +29,10 @@ import tempfile
 
 current_dir = os.getcwd()
 script_dir = os.path.dirname(os.path.abspath(__file__))
+
 webrtc_dir = os.path.join(script_dir, "webrtc")
-src_dir = os.path.join(webrtc_dir, "src")
+webrtc_src_dir = os.path.join(webrtc_dir, "src")
+webrtc_src_build_dir = os.path.join(webrtc_src_dir, "build")
 
 windows = platform.system() == 'Windows'
 linux = platform.system() == 'Linux'
@@ -108,7 +110,7 @@ class WebRTCPackager:
     for subdir in [ 'webrtc', 'third_party' ]:
       # Gather all the header files from webrtc
       headers_ext = [ '.h', '.hpp', '.h.def' ]
-      src = os.path.join(src_dir, subdir)
+      src = os.path.join(webrtc_src_dir, subdir)
       headers = findAllFilesWithExtension(src, headers_ext)
       copyFiles(src, os.path.join(package_dir, 'include', subdir), headers)
 
@@ -218,8 +220,8 @@ class WebRTCPackager:
     # Remove the -D and =xxxx from the define to get the name
     def_names = { re.sub('-D(\w+).*', '\\1', d):d for d in defs }
     # Look which defines are actually used in webrtc and only print those.
-    self.filterDefines(os.path.join(src_dir, 'third_party'), def_names, used_defs)
-    self.filterDefines(os.path.join(src_dir, 'webrtc'), def_names, used_defs)
+    self.filterDefines(os.path.join(webrtc_src_dir, 'third_party'), def_names, used_defs)
+    self.filterDefines(os.path.join(webrtc_src_dir, 'webrtc'), def_names, used_defs)
 
     print "set(webrtc_DEFS"
     print "\n".join(["  " + used_defs[x] for x in used_defs.keys()])
@@ -324,11 +326,11 @@ def build(build_dir, configuration):
       args.append("target_cpu=\\\"x86\\\"")
 
   cmd = "gn gen %s --args=\"%s\"" % (out_dir, ' '.join(args))
-  if subprocess.call(cmd, cwd=src_dir, shell=True) != 0:
+  if subprocess.call(cmd, cwd=webrtc_src_dir, shell=True) != 0:
     exit(1)
 
   cmd = ['ninja', '-j5', '-C', out_dir]
-  if subprocess.call(cmd, cwd=src_dir) != 0:
+  if subprocess.call(cmd, cwd=webrtc_src_dir) != 0:
     exit(1)
 
 def copy(src, dest_dir):
@@ -365,9 +367,9 @@ def trimThirdParty():
   elif windows:
     libs.append("winsdk_samples")
 
-  third_party_dir = os.path.join(src_dir, "third_party")
-  third_party_old_dir = os.path.join(src_dir, "third_party.old")
-  third_party_new_dir = os.path.join(src_dir, "third_party.new")
+  third_party_dir = os.path.join(webrtc_src_dir, "third_party")
+  third_party_old_dir = os.path.join(webrtc_src_dir, "third_party.old")
+  third_party_new_dir = os.path.join(webrtc_src_dir, "third_party.new")
   if not os.path.isdir(third_party_old_dir) and os.path.isdir(third_party_dir):
     # No third_party_old_dir: either hasn't been run, or failed during copy to third_party_new_dir.
     # No third_party_dir: completed up to, but not including, rename of third_party_new_dir to third_party_dir.
@@ -382,125 +384,171 @@ def trimThirdParty():
   if os.path.isdir(third_party_new_dir):
     os.rename(third_party_new_dir, third_party_dir)
 
-# Set up a repository within the WebRTC repository
+# Sets up a repository within the WebRTC repository and updates
 def initializeSubrepository(path, url):
   cmd = ["git", "remote", "add", "st", url]
   cwd = path
   if subprocess.call(cmd, cwd=cwd) != 0:
-    print >> sys.stderr, "Could not add st remote \"%s\" for \"%s\"" % (url, path)
+    print >> sys.stderr, "Could not add st remote \"%s\" for \"%s\"; it may already exist." % (url, path)
+
+  if not updateSubrepository(path):
+    print >> sys.stderr, "%s update failed." % path
     return False
 
+  return True
+
+# Sets up the WebRTC repository and updates
+def initializeRepository():
+  if not os.path.exists(webrtc_dir):
+    os.makedirs(webrtc_dir)
+
+  cmd = ["fetch", "--nohooks", "webrtc"]
+  cwd = webrtc_dir
+  if subprocess.call(cmd, cwd=cwd) != 0:
+    print >> sys.stderr, "Could not fetch webrtc; it may have already been fetched."
+    return False
+
+  cmd = ["gclient", "sync"]
+  cwd = webrtc_dir
+  if subprocess.call(cmd, cwd=cwd) != 0:
+    print >> sys.stderr, "Could not do initial gclient sync."
+    return False
+
+  # Initialize "src" repository first.
+  if not initializeSubrepository(webrtc_src_dir, "https://github.com/suitabletech/webrtc_src.git"):
+    print >> sys.stderr, "Could not initialize \"%s\"." % webrtc_src_dir
+    return False
+
+  # This has to be done after "src" is initialized, but before "src" subdirectories
+  # are initialized (since gclient sync will set them to the upstream checkout).
+  cmd = ["gclient", "sync"]
+  cwd = webrtc_src_dir
+  if subprocess.call(cmd, cwd=cwd) != 0:
+    print >> sys.stderr, "Could not do final gclient sync."
+    return False
+
+  if not initializeSubrepository(webrtc_src_build_dir, "https://github.com/suitabletech/webrtc_src_build.git"):
+    print >> sys.stderr, "Could not initialize \"%s\"." % webrtc_src_build_dir
+    return False
+
+  trimThirdParty()
+
+  return True
+
+# Updates a repository within the WebRTC repository to latest in "st" branch
+def updateSubrepository(path):
   cmd = ["git", "fetch", "st"]
   cwd = path
   if subprocess.call(cmd, cwd=cwd) != 0:
-    print >> sys.stderr, "Could not fetch to \"%s\" from st" % path
+    print >> sys.stderr, "Could not fetch to \"%s\" from st." % path
     return False
 
   cmd = ["git", "checkout", "st"]
   cwd = path
   if subprocess.call(cmd, cwd=cwd) != 0:
-    print >> sys.stderr, "Could not checkout to \"%s\" from st" % path
+    print >> sys.stderr, "Could not checkout to \"%s\" from st." % path
     return False
 
   cmd = ["git", "pull", "st", "st"]
   cwd = path
   if subprocess.call(cmd, cwd=cwd) != 0:
-    print >> sys.stderr, "Could not pull to \"%s\" from st" % path
+    print >> sys.stderr, "Could not pull to \"%s\" from st." % path
     return False
 
   return True
 
-# Set up the WebRTC repository
-def initializeRepository():
-  if not os.path.exists(webrtc_dir):
-    os.makedirs(webrtc_dir)
+# Updates the WebRTC repository to latest in "st" branch
+def updateRepository():
+  if not updateSubrepository(webrtc_src_dir):
+    print >> sys.stderr, "\"src\" update failed."
+    return False
 
-    cmd = ["fetch", "--nohooks", "webrtc"]
-    cwd = webrtc_dir
-    if subprocess.call(cmd, cwd=cwd) != 0:
-      print >> sys.stderr, "Could not fetch webrtc."
-      return False
+  if not updateSubrepository(webrtc_src_build_dir):
+    print >> sys.stderr, "\"src/build\" update failed."
+    return False
 
-    cmd = ["gclient", "sync"]
-    cwd = webrtc_dir
-    if subprocess.call(cmd, cwd=cwd) != 0:
-      print >> sys.stderr, "Could not do initial gclient sync."
-      return False
-
-    if not initializeSubrepository(src_dir, "https://github.com/suitabletech/webrtc_src.git"):
-      print >> sys.stderr, "\"src\" initialization failed"
-      return False
-
-    cmd = ["gclient", "sync"]
-    cwd = src_dir
-    if subprocess.call(cmd, cwd=cwd) != 0:
-      print >> sys.stderr, "Could not do final gclient sync."
-      return False
-
-    src_build_dir = os.path.join(src_dir, "build")
-    if not initializeSubrepository(src_build_dir, "https://github.com/suitabletech/webrtc_src_build.git"):
-      print >> sys.stderr, "\"src/build\" initialization failed"
-      return False
-
-  trimThirdParty()
   return True
 
-def main(argv):
-  usage = "Usage: %prog [options]"
-
+def parseArguments():
   default_platform = {
     'Windows': 'win32',
     'Linux': 'linux-x64',
     'Darwin': 'osx',
   }.get(platform.system(), None)
 
-  parser = optparse.OptionParser(usage=usage)
-  parser.add_option("-o", "--output", dest="output", default=current_dir, help="Path for the webrtc build directory (default: current working directory)")
-  parser.add_option("--depot_tools", dest="depot_tools", default=None, help="Location for the depot_tools checkout directory (default: <script_dir>/depot_tools)")
-  parser.add_option("-v", "--version", dest="version", default=None, help="Name to give the build; recommended to use the format <date>-<git change number>")
-  parser.add_option("-p", "--platform", dest="platform", default=default_platform, help="Name of the platform to generate for ('linux-x64', 'win32', 'osx', or 'linux-android-armeabi-v7a'; default: host platform)")
-  parser.add_option("-c", "--configuration", dest="configuration", default="Both", help="Build configuration ('Debug', 'Release', or 'Both'; default: 'Both')")
-  (options, args) = parser.parse_args(argv)
+  parser = argparse.ArgumentParser()
+  parser.add_argument("-o", "--output", dest="output", default=current_dir, help="Path for the webrtc build directory (default: current working directory)")
+  parser.add_argument("--depot_tools", dest="depot_tools", default=None, help="Location for the depot_tools checkout directory (default: <script_dir>/depot_tools)")
+  parser.add_argument("-v", "--version", dest="version", default=None, help="Name to give the build; recommended to use the format <date>-<git change number>")
+  parser.add_argument("-p", "--platform", dest="platform", default=default_platform, help="Name of the platform to generate for ('linux-x64', 'win32', 'osx', or 'linux-android-armeabi-v7a'; default: host platform)")
+  parser.add_argument("-c", "--configuration", dest="configuration", default="Both", help="Build configuration ('Debug', 'Release', or 'Both'; default: 'Both')")
+  parser.add_argument("--clean", action='store_true', help="Clean the webrtc repository first (this will DELETE the \"src\" directory and any changes within)")
+  parser.add_argument("--update", action='store_true', help="Update the webrtc repository first")
+  args = parser.parse_args()
 
-  if options.depot_tools is None:
-    options.depot_tools = os.path.join(script_dir, "depot_tools")
+  if args.depot_tools is None:
+    args.depot_tools = os.path.join(script_dir, "depot_tools")
 
-  print "Options values:"
-  for k in options.__dict__:
-    print "--%s=%s" % (k, options.__dict__[k])
+  return args
 
-  required_options = ["version"]
-  for k in required_options:
-    if not options.__dict__.has_key(k) or not options.__dict__[k]:
-      parser.error("Option '" + k + "' must be specified")
-
-  if not os.path.exists(options.depot_tools):
-    cmd = ["git", "clone", "https://chromium.googlesource.com/chromium/tools/depot_tools.git", os.path.basename(options.depot_tools)]
-    cwd = os.path.dirname(options.depot_tools)
+def initializeDepotTools(path):
+  if not os.path.exists(path):
+    cmd = ["git", "clone", "https://chromium.googlesource.com/chromium/tools/depot_tools.git", os.path.basename(path)]
+    cwd = os.path.dirname(path)
     if subprocess.call(cmd, cwd=cwd) != 0:
-      print >> sys.stderr, "Could not clone depot_tools to %s" % options.depot_tools
-      exit(1)
+      print >> sys.stderr, "Could not clone depot_tools to \"%s\"." % path
+      return False
 
-  os.environ['PATH'] = options.depot_tools + os.pathsep + os.environ['PATH']
+  os.environ['PATH'] = path + os.pathsep + os.environ['PATH']
+  return True
 
-  if not initializeRepository():
-    print >> sys.stderr, "Repository initialization failed. Delete %s in order to try again." % webrtc_dir
+def main():
+  args = parseArguments()
+  print(args)
+
+  if args.version is None:
+    print >> sys.stderr, "--version is required."
     exit(1)
 
-  if options.configuration in ['Debug', 'Release']:
-    build(options.output, options.configuration)
+  if args.clean:
+    print "Cleaning repository..."
+    if os.path.isdir(webrtc_dir):
+      print "Deleting directory \"%s\"..." % webrtc_dir
+      shutil.rmtree(webrtc_dir)
+    cmd = ["git", "clean", "-dfx"]
+    if subprocess.call(cmd, cwd=script_dir) != 0:
+        print >> sys.stderr, "Clean failed."
+        exit(1)
+
+  if not initializeDepotTools(args.depot_tools):
+    print >> sys.stderr, "Depot tools initialization failed for path \"%s\"." % args.depot_tools
+    exit(1)
+
+  if not os.path.exists(webrtc_dir):
+    print "Initializing repository..."
+    if not initializeRepository():
+      print >> sys.stderr, "Repository initialization failed. Try running again with --clean."
+      exit(1)
+  elif args.update:
+    print "Updating repository..."
+    if not updateRepository():
+      print >> sys.stderr, "Repository update failed. Try running again with --clean."
+      exit(1)
+
+  if args.configuration in ['Debug', 'Release']:
+    build(args.output, args.configuration)
   else:
-    build(options.output, 'Debug')
-    build(options.output, 'Release')
+    build(args.output, 'Debug')
+    build(args.output, 'Release')
 
   packager = WebRTCPackager(
-    options.output,
-    options.version,
-    options.platform,
-    options.configuration
+    args.output,
+    args.version,
+    args.platform,
+    args.configuration
   )
   packager.buildPackage()
   packager.extractLibsFromNinjaFile()
 
 if __name__ == "__main__":
-  main(sys.argv)
+  main()
