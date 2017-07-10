@@ -330,7 +330,7 @@ def build(build_dir, configuration):
     exit(1)
 
   cmd = ['ninja', '-j5', '-C', out_dir]
-  if subprocess.call(cmd, cwd=webrtc_src_dir, shell=True) != 0:
+  if subprocess.call(cmd, cwd=webrtc_src_dir, shell=windows) != 0:
     exit(1)
 
 def copy(src, dest_dir):
@@ -402,12 +402,12 @@ def initializeRepository():
     os.makedirs(webrtc_dir)
 
   cmd = ["fetch", "--nohooks", "webrtc"]
-  if subprocess.call(cmd, cwd=webrtc_dir, shell=True) != 0:
+  if subprocess.call(cmd, cwd=webrtc_dir, shell=windows) != 0:
     print >> sys.stderr, "Could not fetch webrtc; it may have already been fetched."
     return False
 
   cmd = ["gclient", "sync"]
-  if subprocess.call(cmd, cwd=webrtc_dir, shell=True) != 0:
+  if subprocess.call(cmd, cwd=webrtc_dir, shell=windows) != 0:
     print >> sys.stderr, "Could not do initial gclient sync."
     return False
 
@@ -419,7 +419,7 @@ def initializeRepository():
   # This has to be done after "src" is initialized, but before "src" subdirectories
   # are initialized (since gclient sync will set them to the upstream checkout).
   cmd = ["gclient", "sync"]
-  if subprocess.call(cmd, cwd=webrtc_src_dir, shell=True) != 0:
+  if subprocess.call(cmd, cwd=webrtc_src_dir, shell=windows) != 0:
     print >> sys.stderr, "Could not do final gclient sync."
     return False
 
