@@ -6,10 +6,9 @@
 # - It generates a tar.gz that can be uploaded to repo.suitabletech.com
 #
 # Usage example:
-# st_build.py --platform=linux-x64 -c Release -v 20170131_ac61b745df8eb918e8a39368fec7d7c3a890f221
+# st_build.py -c Release
 #
-# By convention, use the date and webrtc source revision for <version>. The date is convenient to quickly know how old the
-# revision is, and webrtc rev number provides the exact reference for the webrtc source code. Note that you want to use the exact
+# If not otherwise specified, the version is the WebRTC source revision. Note that you want to use the exact
 # same version string for all platforms.
 #
 # Important note: this script makes platform-specific changes in the source tree, so it is not possible to
@@ -472,7 +471,7 @@ def parseArguments():
   parser = argparse.ArgumentParser()
   parser.add_argument("-o", "--output", dest="output", default=current_dir, help="Path for the webrtc build directory (default: current working directory)")
   parser.add_argument("--depot_tools", dest="depot_tools", default=None, help="Location for the depot_tools checkout directory (default: <script_dir>/depot_tools)")
-  parser.add_argument("-v", "--version", dest="version", default=None, help="Name to give the build; recommended to use the format <date>-<git change number>")
+  parser.add_argument("-v", "--version", dest="version", default=None, help="Name to give the build (default: git revision")
   parser.add_argument("-p", "--platform", dest="platform", default=default_platform, help="Name of the platform to generate for ('linux-x64', 'win32', 'osx', or 'linux-android-armeabi-v7a'; default: host platform)")
   parser.add_argument("-c", "--configuration", dest="configuration", default="Both", help="Build configuration ('Debug', 'Release', or 'Both'; default: 'Both')")
   parser.add_argument("--clean", action='store_true', help="Clean the webrtc repository first (this will DELETE the \"src\" directory and any changes within)")
@@ -481,6 +480,9 @@ def parseArguments():
 
   if args.depot_tools is None:
     args.depot_tools = os.path.join(script_dir, "depot_tools")
+
+  if args.version is None:
+    args.version = getRevision(script_dir)
 
   return args
 
@@ -497,13 +499,22 @@ def initializeDepotTools(path):
 
   return True
 
+# Get the revision of the git repository at the path.
+def getRevision(path):
+  return subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=path).strip()
+
+# Update the revisions.txt file; this goes into source control so that they
+# are reflected in the root revision.
+def updateRevisions():
+  webrtc_src_ver = getRevision(webrtc_src_dir)
+  webrtc_src_build_ver = getRevision(webrtc_src_build_dir)
+  with open(os.path.join(script_dir, 'revisions.txt'), 'w') as file:
+    file.write("%s: %s\n" % (os.path.relpath(webrtc_src_dir, script_dir), webrtc_src_ver))
+    file.write("%s: %s\n" % (os.path.relpath(webrtc_src_build_dir, script_dir), webrtc_src_build_ver))
+
 def main():
   args = parseArguments()
   print(args)
-
-  if args.version is None:
-    print >> sys.stderr, "--version is required."
-    exit(1)
 
   if args.clean:
     print "Cleaning repository..."
@@ -529,6 +540,8 @@ def main():
     if not updateRepository():
       print >> sys.stderr, "Repository update failed. Try running again with --clean."
       exit(1)
+
+  updateRevisions()
 
   if args.configuration in ['Debug', 'Release']:
     build(args.output, args.configuration)
