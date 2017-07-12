@@ -516,8 +516,8 @@ def updateRevisions():
   webrtc_src_ver = getRevision(webrtc_src_dir)
   webrtc_src_build_ver = getRevision(webrtc_src_build_dir)
   with open(os.path.join(script_dir, 'revisions.txt'), 'w') as file:
-    file.write("%s: %s\n" % (os.path.relpath(webrtc_src_dir, script_dir), webrtc_src_ver))
-    file.write("%s: %s\n" % (os.path.relpath(webrtc_src_build_dir, script_dir), webrtc_src_build_ver))
+    file.write("%s: %s\n" % (os.path.relpath(webrtc_src_dir, script_dir).replace('\\', '/'), webrtc_src_ver))
+    file.write("%s: %s\n" % (os.path.relpath(webrtc_src_build_dir, script_dir).replace('\\', '/'), webrtc_src_build_ver))
 
 def main():
   args = parseArguments()
