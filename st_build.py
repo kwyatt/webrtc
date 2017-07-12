@@ -483,6 +483,7 @@ def parseArguments():
   parser.add_argument("-c", "--configuration", dest="configuration", default="Both", help="Build configuration ('Debug', 'Release', or 'Both'; default: 'Both')")
   parser.add_argument("--clean", action='store_true', help="Clean the webrtc repository first (this will DELETE the \"src\" directory and any changes within)")
   parser.add_argument("--no-update", dest="update", action='store_false', help="Skip updating the webrtc repository first")
+  parser.add_argument("--no-package", dest="package", action='store_false', help="Skip generating the package")
   args = parser.parse_args()
 
   if args.depot_tools is None:
@@ -556,14 +557,15 @@ def main():
     build(args.output, 'Debug')
     build(args.output, 'Release')
 
-  packager = WebRTCPackager(
-    args.output,
-    args.version,
-    args.platform,
-    args.configuration
-  )
-  packager.buildPackage()
-  packager.extractLibsFromNinjaFile()
+  if (args.package):
+    packager = WebRTCPackager(
+      args.output,
+      args.version,
+      args.platform,
+      args.configuration
+    )
+    packager.buildPackage()
+    packager.extractLibsFromNinjaFile()
 
 if __name__ == "__main__":
   main()
