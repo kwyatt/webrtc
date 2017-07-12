@@ -482,7 +482,7 @@ def parseArguments():
   parser.add_argument("-p", "--platform", dest="platform", default=default_platform, help="Name of the platform to generate for ('linux-x64', 'win32', 'osx', or 'linux-android-armeabi-v7a'; default: host platform)")
   parser.add_argument("-c", "--configuration", dest="configuration", default="Both", help="Build configuration ('Debug', 'Release', or 'Both'; default: 'Both')")
   parser.add_argument("--clean", action='store_true', help="Clean the webrtc repository first (this will DELETE the \"src\" directory and any changes within)")
-  parser.add_argument("--update", action='store_true', help="Update the webrtc repository first")
+  parser.add_argument("--no-update", dest="update", action='store_false', help="Skip updating the webrtc repository first")
   args = parser.parse_args()
 
   if args.depot_tools is None:
