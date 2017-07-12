@@ -120,9 +120,8 @@ class WebRTCPackager:
 
   # Make tar.gz archive
   def makePackageArchive(self, package_dir, version_name):
-    os.chdir(self.build_root)
     archive_name = 'webrtc-' + version_name + '-' + self.platform + ".tar.gz"
-    if subprocess.call(['cmake', '-E', 'tar', 'cvzf', archive_name, version_name]) != 0:
+    if subprocess.call(['cmake', '-E', 'tar', 'cvzf', archive_name, version_name], cwd=self.build_root) != 0:
       sys.exit(1)
 
   # Build a tar.gz that we can upload to repo
