@@ -32,6 +32,7 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 webrtc_dir = os.path.join(script_dir, "webrtc")
 webrtc_src_dir = os.path.join(webrtc_dir, "src")
 webrtc_src_build_dir = os.path.join(webrtc_src_dir, "build")
+webrtc_src_third_party_dir = os.path.join(webrtc_src_dir, "third_party")
 
 windows = platform.system() == 'Windows'
 linux = platform.system() == 'Linux'
@@ -345,50 +346,6 @@ def copy(src, dest_dir):
   else:
     shutil.copy(src, dest_dir)
 
-# Remove unneeded libraries from third_party.
-def trimThirdParty():
-  libs = [
-    "boringssl",
-    "expat",
-    "gflags",
-    "jsoncpp",
-    "libjpeg_turbo",
-    "libsrtp",
-    "libvpx",
-    "libyuv",
-    "opus",
-    "protobuf",
-    "usrsctp",
-    "yasm",
-  ]
-  if mac:
-    libs.extend(
-      [
-        "llvm-build",
-        "openmax_dl",
-        "ocmock",
-      ]
-    )
-  elif windows:
-    libs.append("winsdk_samples")
-
-  third_party_dir = os.path.join(webrtc_src_dir, "third_party")
-  third_party_old_dir = os.path.join(webrtc_src_dir, "third_party.old")
-  third_party_new_dir = os.path.join(webrtc_src_dir, "third_party.new")
-  if not os.path.isdir(third_party_old_dir) and os.path.isdir(third_party_dir):
-    # No third_party_old_dir: either hasn't been run, or failed during copy to third_party_new_dir.
-    # No third_party_dir: completed up to, but not including, rename of third_party_new_dir to third_party_dir.
-    shutil.rmtree(third_party_new_dir, ignore_errors=True)
-    os.makedirs(third_party_new_dir)
-
-    copy(os.path.join(third_party_dir, "BUILD.gn"), third_party_new_dir)
-    for lib in libs:
-      copy(os.path.join(third_party_dir, lib), third_party_new_dir)
-
-    os.rename(third_party_dir, third_party_old_dir)
-  if os.path.isdir(third_party_new_dir):
-    os.rename(third_party_new_dir, third_party_dir)
-
 # Sets up a repository within the WebRTC repository and updates
 def initializeSubrepository(path, url):
   cmd = ["git", "remote", "add", "st", url]
@@ -411,7 +368,7 @@ def initializeRepository():
     print >> sys.stderr, "Could not fetch webrtc; it may have already been fetched."
     return False
 
-  cmd = ["gclient", "sync"]
+  cmd = ["gclient", "sync", "-v"]
   if subprocess.call(cmd, cwd=webrtc_dir, shell=windows) != 0:
     print >> sys.stderr, "Could not do initial gclient sync."
     return False
@@ -423,7 +380,7 @@ def initializeRepository():
 
   # This has to be done after "src" is initialized, but before "src" subdirectories
   # are initialized (since gclient sync will set them to the upstream checkout).
-  cmd = ["gclient", "sync"]
+  cmd = ["gclient", "sync", "-v"]
   if subprocess.call(cmd, cwd=webrtc_src_dir, shell=windows) != 0:
     print >> sys.stderr, "Could not do final gclient sync."
     return False
@@ -431,8 +388,9 @@ def initializeRepository():
   if not initializeSubrepository(webrtc_src_build_dir, "https://github.com/suitabletech/webrtc_src_build.git"):
     print >> sys.stderr, "Could not initialize \"%s\"." % webrtc_src_build_dir
     return False
-
-  trimThirdParty()
+  if not initializeSubrepository(webrtc_src_third_party_dir, "https://github.com/suitabletech/webrtc_src_third_party.git"):
+    print >> sys.stderr, "Could not initialize \"%s\"." % webrtc_src_third_party_dir
+    return False
 
   return True
 
@@ -462,6 +420,10 @@ def updateRepository():
     return False
 
   if not updateSubrepository(webrtc_src_build_dir):
+    print >> sys.stderr, "\"src/build\" update failed."
+    return False
+
+  if not updateSubrepository(webrtc_src_third_party_dir):
     print >> sys.stderr, "\"src/build\" update failed."
     return False
 
