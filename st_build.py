@@ -31,8 +31,10 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 
 webrtc_dir = os.path.join(script_dir, "webrtc")
 webrtc_src_dir = os.path.join(webrtc_dir, "src")
-webrtc_src_build_dir = os.path.join(webrtc_src_dir, "build")
-webrtc_src_third_party_dir = os.path.join(webrtc_src_dir, "third_party")
+webrtc_src_subrepos = {
+  "webrtc_src_build": os.path.join(webrtc_src_dir, "build"),
+  "webrtc_src_third_party": os.path.join(webrtc_src_dir, "third_party")
+}
 
 windows = platform.system() == 'Windows'
 linux = platform.system() == 'Linux'
@@ -385,12 +387,10 @@ def initializeRepository():
     print >> sys.stderr, "Could not do final gclient sync."
     return False
 
-  if not initializeSubrepository(webrtc_src_build_dir, "https://github.com/suitabletech/webrtc_src_build.git"):
-    print >> sys.stderr, "Could not initialize \"%s\"." % webrtc_src_build_dir
-    return False
-  if not initializeSubrepository(webrtc_src_third_party_dir, "https://github.com/suitabletech/webrtc_src_third_party.git"):
-    print >> sys.stderr, "Could not initialize \"%s\"." % webrtc_src_third_party_dir
-    return False
+  for name, path in webrtc_src_subrepos.iteritems():
+    if not initializeSubrepository(path, "https://github.com/suitabletech/%s.git" % name):
+      print >> sys.stderr, "Could not initialize \"%s\"." % path
+      return False
 
   return True
 
@@ -419,13 +419,10 @@ def updateRepository():
     print >> sys.stderr, "\"src\" update failed."
     return False
 
-  if not updateSubrepository(webrtc_src_build_dir):
-    print >> sys.stderr, "\"src/build\" update failed."
-    return False
-
-  if not updateSubrepository(webrtc_src_third_party_dir):
-    print >> sys.stderr, "\"src/build\" update failed."
-    return False
+  for name, path in webrtc_src_subrepos.iteritems():
+    if not updateSubrepository(path):
+      print >> sys.stderr, "\"%s\" update failed." % path
+      return False
 
   return True
 
@@ -475,11 +472,14 @@ def getRevision(path):
 # Update the revisions.txt file; this goes into source control so that they
 # are reflected in the root revision.
 def updateRevisions():
-  webrtc_src_ver = getRevision(webrtc_src_dir)
-  webrtc_src_build_ver = getRevision(webrtc_src_build_dir)
+
   with open(os.path.join(script_dir, 'revisions.txt'), 'wb') as file:
-    file.write("%s: %s\n" % (os.path.relpath(webrtc_src_dir, script_dir).replace('\\', '/'), webrtc_src_ver))
-    file.write("%s: %s\n" % (os.path.relpath(webrtc_src_build_dir, script_dir).replace('\\', '/'), webrtc_src_build_ver))
+    revision = getRevision(webrtc_src_dir)
+    file.write("%s: %s\n" % (os.path.relpath(webrtc_src_dir, script_dir).replace('\\', '/'), revision))
+
+    for name, path in webrtc_src_subrepos.iteritems():
+      revision = getRevision(path)
+      file.write("%s: %s\n" % (os.path.relpath(path, script_dir).replace('\\', '/'), revision))
 
 def main():
   args = parseArguments()
