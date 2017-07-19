@@ -332,6 +332,8 @@ def build(build_dir, configuration):
     )
     if windows:
       args.append("target_cpu=\\\"x86\\\"")
+    elif linux:
+      args.append("force_build_expat=true")
 
   cmd = "gn gen \"%s\" --args=\"%s\"" % (out_dir, ' '.join(args))
   if subprocess.call(cmd, cwd=webrtc_src_dir, shell=True) != 0:
@@ -416,7 +418,7 @@ def updateSubrepository(path):
 # Updates the WebRTC repository to latest in "st" branch
 def updateRepository():
   if not updateSubrepository(webrtc_src_dir):
-    print >> sys.stderr, "\"src\" update failed."
+    print >> sys.stderr, "\"%s\" update failed." % webrtc_src_dir
     return False
 
   for name, path in webrtc_src_subrepos.iteritems():
@@ -472,7 +474,6 @@ def getRevision(path):
 # Update the revisions.txt file; this goes into source control so that they
 # are reflected in the root revision.
 def updateRevisions():
-
   with open(os.path.join(script_dir, 'revisions.txt'), 'wb') as file:
     revision = getRevision(webrtc_src_dir)
     file.write("%s: %s\n" % (os.path.relpath(webrtc_src_dir, script_dir).replace('\\', '/'), revision))
