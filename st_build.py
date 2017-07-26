@@ -231,10 +231,8 @@ class WebRTCPackager:
     print "Unused defs:", defs
 
 def safeMakeDirs(dir):
-  try:
+  if not os.path.isdir(dir):
     os.makedirs(dir)
-  except OSError:
-    pass
 
 def linuxMergeLibraries(libs, src_dir, destination):
   safeMakeDirs(os.path.dirname(destination))
@@ -264,7 +262,7 @@ def winMergeLibraries(libs, src_dir, destination):
   cmd_file.close()
 
   safeMakeDirs(os.path.dirname(destination))
-  if subprocess.call(['lib.exe','/OUT:' + destination, '@' + cmd_file.name]) != 0:
+  if subprocess.call(['lib.exe', '/OUT:' + destination, '@' + cmd_file.name]) != 0:
     sys.exit(1)
 
 def copyFiles(src_dir, dst_dir, file_list, keep_src_path = True):
