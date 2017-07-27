@@ -262,7 +262,7 @@ def winMergeLibraries(libs, src_dir, destination):
   cmd_file.close()
 
   safeMakeDirs(os.path.dirname(destination))
-  if subprocess.call(['lib.exe', '/OUT:' + destination, '@' + cmd_file.name]) != 0:
+  if subprocess.call('vcvarsall.bat x86 && lib.exe /OUT:"%s" @"%s"' % (destination, cmd_file.name), cwd=r'C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC', shell=True) != 0:
     sys.exit(1)
 
 def copyFiles(src_dir, dst_dir, file_list, keep_src_path = True):
