@@ -349,19 +349,19 @@ def copy(src, dest_dir):
     shutil.copy(src, dest_dir)
 
 # Sets up a repository within the WebRTC repository and updates
-def initializeSubrepository(path, url):
+def initializeSubrepository(path, url, branch):
   cmd = ["git", "remote", "add", "st", url]
   if subprocess.call(cmd, cwd=path) != 0:
     print >> sys.stderr, "Could not add st remote \"%s\" for \"%s\"; it may already exist." % (url, path)
 
-  if not updateSubrepository(path):
+  if not updateSubrepository(path, branch):
     print >> sys.stderr, "%s update failed." % path
     return False
 
   return True
 
 # Sets up the WebRTC repository and updates
-def initializeRepository():
+def initializeRepository(branch):
   if not os.path.exists(webrtc_dir):
     os.makedirs(webrtc_dir)
 
@@ -376,7 +376,7 @@ def initializeRepository():
     return False
 
   # Initialize "src" repository first.
-  if not initializeSubrepository(webrtc_src_dir, "https://github.com/suitabletech/webrtc_src.git"):
+  if not initializeSubrepository(webrtc_src_dir, "https://github.com/suitabletech/webrtc_src.git", branch):
     print >> sys.stderr, "Could not initialize \"%s\"." % webrtc_src_dir
     return False
 
@@ -388,39 +388,42 @@ def initializeRepository():
     return False
 
   for name, path in webrtc_src_subrepos.iteritems():
-    if not initializeSubrepository(path, "https://github.com/suitabletech/%s.git" % name):
+    if not initializeSubrepository(path, "https://github.com/suitabletech/%s.git" % name, branch):
       print >> sys.stderr, "Could not initialize \"%s\"." % path
       return False
 
   return True
 
 # Updates a repository within the WebRTC repository to latest in "st" branch
-def updateSubrepository(path):
+def updateSubrepository(path, branch):
+  # Fetch from 'st' remote
   cmd = ["git", "fetch", "st"]
   if subprocess.call(cmd, cwd=path) != 0:
     print >> sys.stderr, "Could not fetch to \"%s\" from st." % path
     return False
 
-  cmd = ["git", "checkout", "st"]
+  # Check out branch
+  cmd = ["git", "checkout", branch]
   if subprocess.call(cmd, cwd=path) != 0:
-    print >> sys.stderr, "Could not checkout to \"%s\" from st." % path
+    print >> sys.stderr, "Could not checkout \"%s\" to \"%s\"." % (path, branch)
     return False
 
-  cmd = ["git", "pull", "st", "st"]
+  # Pull to branch from 'st' remote
+  cmd = ["git", "pull", "st", branch]
   if subprocess.call(cmd, cwd=path) != 0:
-    print >> sys.stderr, "Could not pull to \"%s\" from st." % path
+    print >> sys.stderr, "Could not pull branch \"%s\" from st to \"%s\"." % (branch, path)
     return False
 
   return True
 
 # Updates the WebRTC repository to latest in "st" branch
-def updateRepository():
-  if not updateSubrepository(webrtc_src_dir):
+def updateRepository(branch):
+  if not updateSubrepository(webrtc_src_dir, branch):
     print >> sys.stderr, "\"%s\" update failed." % webrtc_src_dir
     return False
 
   for name, path in webrtc_src_subrepos.iteritems():
-    if not updateSubrepository(path):
+    if not updateSubrepository(path, branch):
       print >> sys.stderr, "\"%s\" update failed." % path
       return False
 
@@ -498,14 +501,16 @@ def main():
     print >> sys.stderr, "Depot tools initialization failed for path \"%s\"." % args.depot_tools
     exit(1)
 
+  branch = subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=script_dir).strip();
+
   if not os.path.exists(webrtc_dir):
-    print "Initializing repository..."
-    if not initializeRepository():
+    print "Initializing repository (branch \"%s\")..." % branch
+    if not initializeRepository(branch):
       print >> sys.stderr, "Repository initialization failed. Try running again with --clean."
       exit(1)
   elif args.update:
-    print "Updating repository..."
-    if not updateRepository():
+    print "Updating repository (branch \"%s\")..." % branch
+    if not updateRepository(branch):
       print >> sys.stderr, "Repository update failed. Try running again with --clean."
       exit(1)
 
