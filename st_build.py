@@ -265,6 +265,12 @@ def winMergeLibraries(libs, src_dir, destination):
   if subprocess.call('vcvarsall.bat x86 && lib.exe /OUT:"%s" @"%s"' % (destination, cmd_file.name), cwd=r'C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC', shell=True) != 0:
     sys.exit(1)
 
+def getGccVersion():
+  proc = subprocess.Popen(['gcc', '-dumpversion'], stdout=subprocess.PIPE)
+  version = proc.stdout.read()
+
+  return int(version[0])
+
 def copyFiles(src_dir, dst_dir, file_list, keep_src_path = True):
   for fname in file_list:
     if keep_src_path:
@@ -332,6 +338,9 @@ def build(build_dir, configuration):
       args.append("target_cpu=\\\"x86\\\"")
     elif linux:
       args.append("force_build_expat=true")
+      # Use the system binutils instead of the copy from Google Storage when compiling with old GCC. The
+      # current version of Google's binutils generate object files not compatible with older GCC.
+      args.append("linux_use_bundled_binutils_override=%s" % ('true' if getGccVersion() >= 5 else 'false'))
 
   cmd = "gn gen \"%s\" --args=\"%s\"" % (out_dir, ' '.join(args))
   if subprocess.call(cmd, cwd=webrtc_src_dir, shell=True) != 0:
@@ -452,6 +461,9 @@ def parseArguments():
 
   if args.version is None:
     args.version = getRevision(script_dir)
+
+  if linux and getGccVersion() >= 5:
+    args.version += "_u16.04"
 
   return args
 
