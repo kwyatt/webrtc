@@ -17,8 +17,6 @@
 # - If the initial build is aborted, it is recommended to delete the <source>/webrtc directory.
 # - If the initial build is aborted during cloning of the depot_tools repository,
 #   it is recommended to delete the depot_tools repository directory.
-# - If you merge with a newer version of webrtc from Google sources, it may be necessary to also update
-#   to a newer version of Google depot_tools. See webrtc_depot_tools_branch below.
 
 import argparse
 import os
@@ -38,8 +36,6 @@ webrtc_src_subrepos = {
   "webrtc_src_build": os.path.join(webrtc_src_dir, "build"),
   "webrtc_src_third_party": os.path.join(webrtc_src_dir, "third_party")
 }
-
-webrtc_depo_tools_branch = '284af3255659442777e08898add8db24b13cd73e'
 
 windows = platform.system() == 'Windows'
 linux = platform.system() == 'Linux'
@@ -478,16 +474,11 @@ def initializeDepotTools(path):
     if subprocess.call(cmd, cwd=os.path.dirname(path)) != 0:
       print >> sys.stderr, "Could not clone depot_tools to \"%s\"." % path
       return False
-    else:
-      # Checkout the specific depot_tools branch
-      cmd = ["git", "checkout", "-b", "st", webrtc_depo_tools_branch]
-      if subprocess.call(cmd, cwd=path) != 0:
-        print >> sys.stderr, "Could not checkout depot_tools branch \"%s\"." % webrtc_depo_tools_branch
-        return False
 
   os.environ['PATH'] = path + os.pathsep + os.environ['PATH']
   if windows:
     os.environ['DEPOT_TOOLS_WIN_TOOLCHAIN'] = '0'
+    os.environ['GYP_MSVS_VERSION'] = '2015'
 
   return True
 
